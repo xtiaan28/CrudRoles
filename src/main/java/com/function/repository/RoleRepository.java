@@ -1,0 +1,100 @@
+package com.function.repository;
+
+import com.function.OracleDBConnection;
+import com.function.model.Role;
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public class RoleRepository {
+    private static final String TABLE_NAME = "ROLES_DC2";
+
+    public static List<Role> getAllRoles() throws SQLException {
+        List<Role> roles = new ArrayList<>();
+        try (Connection conn = OracleDBConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT * FROM " + TABLE_NAME)) {
+
+            while (rs.next()) {
+                roles.add(mapResultSetToRole(rs));
+            }
+        }
+        return roles;
+    }
+
+    public static Role getRoleById(int roleId) throws SQLException {
+        try (Connection conn = OracleDBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                     "SELECT * FROM " + TABLE_NAME + " WHERE ROLE_ID = ?")) {
+
+            stmt.setInt(1, roleId);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                return mapResultSetToRole(rs);
+            }
+            return null;
+        }
+    }
+
+    public static Role createRole(Role role) throws SQLException {
+        try (Connection conn = OracleDBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                     "INSERT INTO " + TABLE_NAME + " (NAME, DESCRIPTION) VALUES (?, ?)",
+                     Statement.RETURN_GENERATED_KEYS)) {
+
+            stmt.setString(1, role.getName());
+            stmt.setString(2, role.getDescription());
+
+            int affectedRows = stmt.executeUpdate();
+
+            if (affectedRows > 0) {
+                try (PreparedStatement selectStmt = conn.prepareStatement(
+                        "SELECT ROLE_ID FROM " + TABLE_NAME + " WHERE NAME = ? ORDER BY ROLE_ID DESC FETCH FIRST 1 ROW ONLY")) {
+                    selectStmt.setString(1, role.getName());
+                    try (ResultSet rs = selectStmt.executeQuery()) {
+                        if (rs.next()) {
+                            role.setRoleId(rs.getInt("ROLE_ID"));
+                        }
+                    }
+                }
+                return role;
+            }
+            throw new SQLException("No se pudo crear el rol");
+        }
+    }
+
+    public static boolean updateRole(Role role) throws SQLException {
+        String sql = "UPDATE " + TABLE_NAME + " SET NAME = ?, DESCRIPTION = ? WHERE ROLE_ID = ?";
+
+        try (Connection conn = OracleDBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, role.getName());
+            stmt.setString(2, role.getDescription());
+            stmt.setInt(3, role.getRoleId());
+
+            int rowsAffected = stmt.executeUpdate();
+            return rowsAffected > 0;
+        }
+    }
+
+    public static boolean deleteRole(int roleId) throws SQLException {
+        try (Connection conn = OracleDBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                     "DELETE FROM " + TABLE_NAME + " WHERE ROLE_ID = ?")) {
+
+            stmt.setInt(1, roleId);
+            return stmt.executeUpdate() > 0;
+        }
+    }
+
+    private static Role mapResultSetToRole(ResultSet rs) throws SQLException {
+        Role role = new Role();
+        role.setRoleId(rs.getInt("ROLE_ID"));
+        role.setName(rs.getString("NAME"));
+        role.setDescription(rs.getString("DESCRIPTION"));
+        role.setCreatedAt(rs.getTimestamp("CREATED_AT"));
+        return role;
+    }
+}
