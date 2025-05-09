@@ -2,8 +2,11 @@ package com.function.repository;
 
 import com.function.OracleDBConnection;
 import com.function.model.Role;
+import com.function.model.User;
+
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class RoleRepository {
@@ -86,6 +89,72 @@ public class RoleRepository {
 
             stmt.setInt(1, roleId);
             return stmt.executeUpdate() > 0;
+        }
+    }
+
+    public static List<User> getUsersByRole(int roleId) throws SQLException {
+        List<User> users = new ArrayList<>();
+        String sql = "SELECT user_id, username, email FROM USERS_DC2 WHERE role_id = ?";
+        
+        try (Connection conn = OracleDBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setInt(1, roleId);
+            
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    User user = new User();
+                    user.setUserId(rs.getInt("user_id"));
+                    user.setUsername(rs.getString("username"));
+                    user.setEmail(rs.getString("email"));
+                    users.add(user);
+                }
+            }
+        }
+        return users;
+    }
+
+    public static int bulkUpdateUserRole(List<User> users, int newRoleId) throws SQLException {
+        if (users == null || users.isEmpty()) {
+            return 0;
+        }
+    
+        String sql = "UPDATE USERS_DC2 SET ROLE_ID = ? WHERE USER_ID = ?";
+        Connection conn = null;
+        try {
+            conn = OracleDBConnection.getConnection();
+            conn.setAutoCommit(false); // Deshabilitar auto-commit para transacción
+            
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                int batchSize = 100; // Tamaño del lote
+                int totalUpdated = 0;
+                
+                for (int i = 0; i < users.size(); i++) {
+                    User user = users.get(i);
+                    stmt.setInt(1, newRoleId);
+                    stmt.setInt(2, user.getUserId());
+                    stmt.addBatch();
+                    
+                    // Ejecutar cada batchSize o al final
+                    if ((i + 1) % batchSize == 0 || (i + 1) == users.size()) {
+                        int[] batchResults = stmt.executeBatch();
+                        totalUpdated += Arrays.stream(batchResults).sum();
+                    }
+                }
+                
+                conn.commit(); // Confirmar transacción
+                return totalUpdated;
+            }
+        } catch (SQLException e) {
+            if (conn != null) {
+                conn.rollback(); // Revertir en caso de error
+            }
+            throw e;
+        } finally {
+            if (conn != null) {
+                conn.setAutoCommit(true); // Restaurar auto-commit
+                conn.close();
+            }
         }
     }
 

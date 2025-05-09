@@ -1,6 +1,7 @@
 package com.function.service;
 
 import com.function.model.Role;
+import com.function.model.User;
 import com.function.repository.RoleRepository;
 
 import java.sql.SQLException;
@@ -26,5 +27,18 @@ public class RoleService {
 
     public static boolean deleteRole(int roleId) throws SQLException {
         return RoleRepository.deleteRole(roleId);
+    }
+
+    public static List<User> getUsersByRole(int roleId) throws SQLException {
+        return RoleRepository.getUsersByRole(roleId);
+    }
+
+    public static int bulkUpdateUserRole(List<User> users, int newRoleId) throws SQLException {
+        try {
+            return RoleRepository.bulkUpdateUserRole(users, newRoleId);
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw e;
+        }
     }
 }

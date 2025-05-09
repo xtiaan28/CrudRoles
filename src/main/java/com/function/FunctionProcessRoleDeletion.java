@@ -5,11 +5,15 @@ import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.*;
 
 import java.sql.SQLException;
+import java.util.List;
 import java.util.logging.Logger;
 
+import com.function.model.User;
 import com.function.service.RoleService;
 
 public class FunctionProcessRoleDeletion {
+
+    private static final int DEFAULT_ROLE_ID = 2;
 
     @FunctionName("ProcessRoleDeletionEvent")
     public void run(
@@ -18,7 +22,6 @@ public class FunctionProcessRoleDeletion {
 
         Logger logger = context.getLogger();
         logger.info("Evento de eliminación de rol recibido.");
-        logger.info("Contenido recibido: " + content);
 
         try {
             Gson gson = new Gson();
@@ -30,16 +33,30 @@ public class FunctionProcessRoleDeletion {
             // Nueva navegación hacia roleId
             JsonObject members = data.getAsJsonObject("members");
             JsonObject roleIdObject = members.getAsJsonObject("roleId");
-            int roleId = Integer.parseInt(roleIdObject.get("value").getAsString());
-
+            int roleIdToDelete = Integer.parseInt(roleIdObject.get("value").getAsString());
             logger.info("Tipo de evento: " + eventType);
-            logger.info("ID del rol a eliminar: " + roleId);
+            logger.info("Procesando eliminación del rol ID: " + roleIdToDelete);
 
-            boolean deleted = RoleService.deleteRole(roleId);
+            // 2. Obtener usuarios con este rol
+            logger.info("Buscando usuarios con el rol " + roleIdToDelete + "...");
+            List<User> users = RoleService.getUsersByRole(roleIdToDelete);
+            logger.info("Encontrados " + users.size() + " usuarios");
+
+            if (!users.isEmpty()) {
+                logger.info("Actualizando usuarios al rol por defecto (" + DEFAULT_ROLE_ID + ")...");
+                int updated = RoleService.bulkUpdateUserRole(users, DEFAULT_ROLE_ID);
+                logger.info(updated + " usuarios actualizados");
+            }
+
+            logger.info("Eliminando rol...");
+            boolean deleted = RoleService.deleteRole(roleIdToDelete);
+
             if (deleted) {
-                logger.info("Rol eliminado correctamente.");
+                logger.info("########## OPERACIÓN EXITOSA ##########");
+                logger.info("Rol " + roleIdToDelete + " eliminado");
+                logger.info(users.size() + " usuarios migrados a rol " + DEFAULT_ROLE_ID);
             } else {
-                logger.warning("No se encontró el rol con ID: " + roleId);
+                logger.warning("No se pudo eliminar el rol " + roleIdToDelete);
             }
 
         } catch (Exception e) {
